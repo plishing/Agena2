@@ -1,0 +1,219 @@
+#!/usr/bin/python
+
+
+import re
+from time import *
+import serial
+import datetime 
+from geographiclib.geodesic import Geodesic
+
+# byte array for a UBX command to set flight mode
+setNav = bytearray.fromhex("B5 62 06 24 24 00 FF FF 06 03 00 00 00 00 10 27 00 00 05 00 FA 00 FA 00 64 00 2C 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 16 DC")
+# byte array for UBX command to disable automatic NMEA response from GPS
+setNMEA_off = bytearray.fromhex("B5 62 06 00 14 00 01 00 00 00 D0 08 00 00 80 25 00 00 07 00 01 00 00 00 00 00 A0 A9")
+
+# function to disable all NMEA sentences
+def disable_sentences():
+
+    GPS = serial.Serial('/dev/ttyAMA0', 9600, timeout=1) # open serial to write to GPS
+
+    # Disabling all NMEA sentences 
+    GPS.write("$PUBX,40,GLL,0,0,0,0*5C\r\n")
+    GPS.write("$PUBX,40,GSA,0,0,0,0*4E\r\n")
+    GPS.write("$PUBX,40,RMC,0,0,0,0*47\r\n")
+    GPS.write("$PUBX,40,GSV,0,0,0,0*59\r\n")
+    GPS.write("$PUBX,40,VTG,0,0,0,0*5E\r\n")
+    GPS.write("$PUBX,40,GGA,0,0,0,0*5A\r\n")
+
+    GPS.close() # close serial
+
+###DISABLE SENTS
+disable_sentences()
+
+
+# fucntion to send commands to the GPS 
+def sendUBX(MSG, length):
+	ser = serial.Serial('/dev/ttyAMA0', 9600, timeout=1) # open serial
+	ser.flush()
+	print "Sending UBX Command: "
+	ubxcmds = ""
+	for i in range(0, length):
+		ser.write(chr(MSG[i])) #write each byte of ubx cmd to serial port
+		ubxcmds = ubxcmds + str(MSG[i]) + " " # build up sent message debug output string
+	ser.write("\r\n") #send newline to ublox
+	ser.flush()
+	ser.close()
+	print ubxcmds #print debug message
+	print "UBX Command Sent..."
+	sleep(3)
+
+
+def cstat( ):
+	ntxstat = open('ntx.txt','r')
+        sendstat = ntxstat.read()
+        sendstat = sendstat.rstrip()
+        ntxstat.close()
+	return sendstat
+
+def gps(mode="A",dummy=1):
+	readprev = open('gpsout.txt','r')
+	deta = readprev.read()
+	deta = deta.split(',')
+	counter = 0
+	prevlat = deta[0] 
+	prevlon = deta[1]
+	prevalt = deta[3]
+	prevtime = deta[2]
+	sendstat = "1"
+
+	if dummy == 1:
+		lat = float(prevlat) + .0017
+		lon = float(prevlon) - .0002
+		time = time.time()
+		if mode == "A":
+			alt = float(prevalt) + 23
+		else:
+			alt = float(prevalt) - 47
+		#vs = 2.4
+		sats = "7"
+		stat = "OK"
+                dt = strptime(time,'%H:%M:%S')
+                dtp = strptime(prevtime,'%H:%M:%S')
+                dts = datetime.timedelta(hours=dt.tm_hour,minutes=dt.tm_min,seconds=dt.tm_sec).total_seconds()
+                dtps = datetime.timedelta(hours=dtp.tm_hour,minutes=dtp.tm_min,seconds=dtp.tm_sec).total_seconds()
+                dtime = dts - dtps
+                gt = Geodesic.WGS84.Inverse(float(prevlat), float(prevlon), float(lat), float(lon))
+                trk = gt['azi1']
+                trk = format(float(trk), '.2f')
+
+                dist = gt['s12']
+                gspeedms = format((float(dist) / dtime), '.2f')
+                gspeedkph = format(float(gspeedms)*3.6, '.2f')
+    
+                vs = (float(alt) - float(prevalt)) / dtime
+                vs = format(vs, '.1f')
+	else:	
+		#Set GPS to NAV Mode in order to enable functions > 12000 m	
+
+	        #ser = serial.Serial('/dev/ttyAMA0', 9600, timeout=1) # open serial
+                #ser.flush() # wait for bytes to be physically read from the GPS
+	        sendUBX(setNav, len(setNav)) # send command to enable flightmode
+		print "sendUBX_ACK function complete"
+		#sendUBX(setNMEA_off, len(setNMEA_off)) # turn NMEA sentences off
+		#ser.flush()
+		#ser.close() # close the serial
+    
+		ser = serial.Serial('/dev/ttyAMA0', 9600, timeout=1)
+		ser.write("$PUBX,00*33\n") # reuest a PUBX sentence
+		#ser.flush()
+		line =  ser.readline()
+		
+		while line.startswith("$PUBX"):
+			ser.write("$PUBX,00*33\n")
+			line = ser.readline()
+
+			ser.close()
+			line = line.split(',')
+	
+#		while not line.startswith("$GNGGA"):
+#			line = ser.readline()
+#			print "No gpgga"
+#			ser.flush()
+#			sleep(3)
+#		if line.startswith("$GNGGA"):
+#			line = line.split(',')
+	
+ 		        if not line[2]:
+				print "GPS NONE"
+      		               	stat = "ACQFAIL"
+				line[2] = 0
+				line[4] = 0
+				line[6] = 0
+				line[7] = 0
+				line[8] = 0
+				line[9] = 0
+      	 	        else:
+				print "GPS OKOKOK"
+       		               	stat = "OK"
+	
+			if stat == "ACQFAIL":
+				time = "00:00:00"
+				longitudefull = "0"
+				latitudefull = "0"
+				lat = "0.0000"
+				lon = "0.0000"
+				gt = "0.0"
+				vs = "0.0"
+				alt = "0.0"
+				gspeedkph = "0.0"
+				sats = "0.0"
+				trk = "0.0"
+				dtime = "0"
+				dist = "0"	
+			else: 
+				print stat	
+				print "GPS VALID"
+				time = line[1]
+				time = time[0:6]
+				#time = datetime.datetime(*strptime(time, "%H%M%S")[0:6]).strftime("%H:%M:%S")
+				latitude = line[2].replace(".","")
+				latitudefull = latitude[:2] + "." + latitude[2:]
+				latitude = format(float(latitudefull), '.4f')
+				longitude = line[4].replace(".","")
+			       	longitudefull = longitude[:3] + "." + longitude[3:]
+       			     	longitude  = format(float(longitudefull), '.4f')
+				lon = float(longitude)
+				lat = float(latitude)
+				if line[5] == "W":
+					longitude = "-"+longitude
+				if line[3] == "S":
+					latitude = "-"+latitude
+						
+				gt = Geodesic.WGS84.Inverse(float(prevlat), float(prevlon), float(latitudefull), float(longitudefull))
+				trk = gt['azi1']
+				if float(trk) < 0:
+					trk = float(trk) + 360
+				trk = int(trk)
+					
+				sats = line[7]
+				alt = line[9]
+						
+				dt = strptime(time,'%H:%M:%S')
+				dtp = strptime(prevtime,'%H:%M:%S')
+				dts = datetime.timedelta(hours=dt.tm_hour,minutes=dt.tm_min,seconds=dt.tm_sec).total_seconds()
+				dtps = datetime.timedelta(hours=dtp.tm_hour,minutes=dtp.tm_min,seconds=dtp.tm_sec).total_seconds()
+				dtime = dts - dtps
+				
+				dist = gt['s12']
+       				gspeedms = format((float(dist) / dtime), '.2f')
+       				gspeedkph = format(float(gspeedms)*3.6, '.2f')
+		
+				vs = (float(alt) - float(prevalt)) / dtime
+				vs = format(vs, '.1f')
+			print "NOW TIME is " + str(time)
+			print "PREV TIME is " + str(prevtime)
+			print dtime
+		
+			print "Heading is " + str(trk)
+			print lat
+			print lon
+			print "PREV LON: " + str(prevlon)
+			print time
+			print "alt is " + alt
+			print "sats is " + sats
+			print "V/S is " + str(vs)
+			print "DISTANCE IS " + str(dist)
+		 	print "GROUND SPD is " + str(gspeedkph)	
+			write = open('gpsout.txt','w')
+			strGPS = str(lat) + "," +  str(lon) + "," + str(time) + "," + str(alt) + "," + str(vs) + "," + str(gspeedkph) + "," + str(sats) + "," + str(trk) + "," + str(stat)
+			write.write(strGPS)
+			write.close()
+
+			prevlon = longitudefull
+			prevlat = latitudefull
+			prevalt = alt
+			prevtime = time
+			sleep(3)
+			counter = counter + 1
+		ser.flush()
+		ser.close()

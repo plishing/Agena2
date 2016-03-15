@@ -1,0 +1,39 @@
+##########################
+#  			 #     
+#    AGENA 2 SOFTWARE    #
+# 			 #
+##########################
+
+This software was built by Christian Mass-Protzen in order to control the AGENA high altitude probe. It mainly evolves around the main process main.py controlling the processes of getting GPS data and sensor data, parsing them into a suitable string and to send that by radio into the ether.
+
+Main computer:
+Raspberry Pi 2 B
+Sensors:
+DHT22
+HMC553L
+MS5611
+DS180B
+
+GPS
+uBLOX MAX M8
+
+Transmiiter
+NTX2B FA
+ 
+
+The software was made only for Agena and I'm pretty sure that it can be improved ;) The software is released under the BeerWare license which pretty much means that you may use, copy and ammend this software - or parts of it - for your own purposes. 
+
+I hope it's useful for any co-HAB'ers. 
+
+
+/*
+ * ----------------------------------------------------------------------------
+ * "THE BEER-WARE LICENSE" (Revision 42):
+ * Christian Mass-Protzen wrote this file.  As long as you retain this notice you
+ * can do whatever you want with this stuff. If we meet some day, and you think
+ * this stuff is worth it, you can buy me a beer in return.   Christian Mass-Protzen
+ * ----------------------------------------------------------------------------
+ */
+
+
+  
